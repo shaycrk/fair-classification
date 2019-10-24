@@ -1,0 +1,7 @@
+Also had to change line 77 in dccp/constraint.py to remove reference to cvx.read(), so:
+return cvx.real(left - right) <= 0, dom
+becomes:
+return left - right <= 0, dom
+
+based on: https://github.com/cvxgrp/dccp/issues/36
+

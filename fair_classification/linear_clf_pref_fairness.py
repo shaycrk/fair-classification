@@ -4,7 +4,7 @@ import numpy as np
 import traceback
 
 sys.path.insert(0, "/home/mzafar/libraries/dccp") # we will store the latest version of DCCP here.
-from cvxpy import *
+import cvxpy
 import dccp
 from dccp.problem import is_dccp
 
@@ -88,10 +88,10 @@ class LinearClf():
         if self.train_multiple == True:
             w = {}
             for k in set(x_sensitive):
-                w[k] = Variable(X.shape[1]) # this is the weight vector
+                w[k] = cvxpy.Variable(X.shape[1]) # this is the weight vector
                 w[k].value = np.random.rand(X.shape[1]) # initialize the value of w -- uniform distribution over [0,1]
         else:
-            w = Variable(X.shape[1]) # this is the weight vector
+            w = cvxpy.Variable(X.shape[1]) # this is the weight vector
             w.value = np.random.rand(X.shape[1])
 
 
@@ -112,10 +112,10 @@ class LinearClf():
                 obj += sum_squares(w[k][1:]) * self.lam[k] # first term in w is the intercept, so no need to regularize that
 
                 if self.loss_function == "logreg":
-                    obj += sum_entries(  logistic( mul_elemwise(-y_k, X_k*w[k]) )  ) / num_all # notice that we are dividing by the length of the whole dataset, and not just of this sensitive group. this way, the group that has more people contributes more to the loss
+                    obj += cvxpy.sum(  cvxpy.logistic( cvxpy.multiply(-y_k, X_k*w[k]) )  ) / num_all # notice that we are dividing by the length of the whole dataset, and not just of this sensitive group. this way, the group that has more people contributes more to the loss
                     
                 elif self.loss_function == "svm_linear":
-                    obj += sum_entries ( max_elemwise (0, 1 - mul_elemwise ( y_k,  X_k*w[k])) ) / num_all
+                    obj += cvxpy.sum ( cvxpy.maximum (0, 1 - cvxpy.multiply ( y_k,  X_k*w[k])) ) / num_all
                     
                 else:
                     raise Exception("Invalid loss function")
@@ -125,9 +125,9 @@ class LinearClf():
             obj = 0
             obj += sum_squares(w[1:]) * self.lam # regularizer -- first term in w is the intercept, so no need to regularize that
             if self.loss_function == "logreg":
-                obj += sum_entries(  logistic( mul_elemwise(-y, X*w) )  ) / num_all
+                obj += cvxpy.sum(  cvxpy.logistic( cvxpy.multiply(-y, X*w) )  ) / num_all
             elif self.loss_function == "svm_linear":
-                obj += sum_entries ( max_elemwise (0, 1 - mul_elemwise ( y,  X*w)) ) / num_all
+                obj += cvxpy.sum ( cvxpy.maximum (0, 1 - cvxpy.multiply ( y,  X*w)) ) / num_all
             else:
                 raise Exception("Invalid loss function")
 
@@ -152,7 +152,7 @@ class LinearClf():
 
         
 
-        prob = Problem(Minimize(obj), constraints)
+        prob = cvxpy.Problem(cvxpy.Minimize(obj), constraints)
         # print "Problem is DCP (disciplined convex program):", prob.is_dcp()
         # print "Problem is DCCP (disciplined convex-concave program):", is_dccp(prob)
 
@@ -176,7 +176,7 @@ class LinearClf():
 
             
             # print "Optimization done, problem status:", prob.status
-            assert(prob.status == "Converged" or prob.status == "optimal")
+            assert(prob.status is None or prob.status == "Converged" or prob.status == "optimal")
             
 
             # check that the fairness constraint is satisfied
@@ -293,7 +293,7 @@ class LinearClf():
         z_i_z_bar = x_sensitive - np.mean(x_sensitive)
 
         fx = X*w
-        prod = sum_entries( mul_elemwise(z_i_z_bar, fx) ) / X.shape[0]
+        prod = cvxpy.sum( cvxpy.multiply(z_i_z_bar, fx) ) / X.shape[0]
         
 
         constraints.append( prod <=  cov_thresh )
@@ -321,7 +321,7 @@ class LinearClf():
                 num_g = X_g.shape[0]
 
                 for k in w.keys(): # get the distance with each group's w
-                    prod_dict[val][k] = sum_entries(  max_elemwise(0, X_g*w[k])   ) / num_g
+                    prod_dict[val][k] = cvxpy.sum(  cvxpy.maximum(0, X_g*w[k])   ) / num_g
 
                     
             

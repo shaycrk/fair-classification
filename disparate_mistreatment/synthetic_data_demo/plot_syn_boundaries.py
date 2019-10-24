@@ -2,7 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt # for plotting stuff
 import os
 
-matplotlib.rcParams['text.usetex'] = True
+# matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams.update({'figure.autolayout': True})
 
 def get_line_coordinates(w, x1, x2):

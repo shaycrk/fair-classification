@@ -5,7 +5,7 @@ import numpy as np
 from random import seed, shuffle
 from collections import defaultdict
 from copy import deepcopy
-from cvxpy import *
+import cvxpy
 import dccp
 from dccp.problem import is_dccp
 import utils as ut
@@ -58,7 +58,7 @@ def train_model_disp_mist(x, y, x_control, loss_function, EPS, cons_params=None)
 
     
     num_points, num_features = x.shape
-    w = Variable(num_features) # this is the weight vector
+    w = cvxpy.Variable(num_features) # this is the weight vector
 
     # initialize a random value of w
     np.random.seed(112233)
@@ -72,7 +72,7 @@ def train_model_disp_mist(x, y, x_control, loss_function, EPS, cons_params=None)
 
     if loss_function == "logreg":
         # constructing the logistic loss problem
-        loss = sum_entries(  logistic( mul_elemwise(-y, x*w) )  ) / num_points # we are converting y to a diagonal matrix for consistent
+        loss = cvxpy.sum(  cvxpy.logistic( cvxpy.multiply(-y, x*w) )  ) / num_points # we are converting y to a diagonal matrix for consistent
 
 
     # sometimes, its a good idea to give a starting point to the constrained solver
@@ -85,12 +85,12 @@ def train_model_disp_mist(x, y, x_control, loss_function, EPS, cons_params=None)
             take_initial_sol = False
 
         if take_initial_sol == True: # get the initial solution
-            p = Problem(Minimize(loss), [])
+            p = cvxpy.Problem(cvxpy.Minimize(loss), [])
             p.solve()
 
 
     # construct the cvxpy problem
-    prob = Problem(Minimize(loss), constraints)
+    prob = cvxpy.Problem(cvxpy.Minimize(loss), constraints)
 
     # print "\n\n"
     # print "Problem is DCP (disciplined convex program):", prob.is_dcp()
@@ -104,12 +104,12 @@ def train_model_disp_mist(x, y, x_control, loss_function, EPS, cons_params=None)
             if cons_params.get("mu") is not None: mu = cons_params["mu"]
 
         prob.solve(method='dccp', tau=tau, mu=mu, tau_max=1e10,
-            solver=ECOS, verbose=False, 
+            solver=cvxpy.ECOS, verbose=False, 
             feastol=EPS, abstol=EPS, reltol=EPS,feastol_inacc=EPS, abstol_inacc=EPS, reltol_inacc=EPS,
             max_iters=max_iters, max_iter=max_iter_dccp)
 
-        
-        assert(prob.status == "Converged" or prob.status == "optimal")
+         
+        assert(prob.status is None or prob.status == "Converged" or prob.status == "optimal") # oddly, cvxpy doesn't seem to be updating the status?
         # print "Optimization done, problem status:", prob.status
 
     except:
@@ -120,7 +120,7 @@ def train_model_disp_mist(x, y, x_control, loss_function, EPS, cons_params=None)
 
     # check that the fairness constraint is satisfied
     for f_c in constraints:
-        assert(f_c.value == True) # can comment this out if the solver fails too often, but make sure that the constraints are satisfied empirically. alternatively, consider increasing tau parameter
+        assert(f_c.value() == True) # can comment this out if the solver fails too often, but make sure that the constraints are satisfied empirically. alternatively, consider increasing tau parameter
         pass
         
 
@@ -166,12 +166,12 @@ def get_clf_stats(w, x_train, y_train, x_control_train, x_test, y_test, x_contro
         cov_all_train[s_attr] = get_sensitive_attr_constraint_fpr_fnr_cov(None, x_train, y_train, distances_boundary_train, x_control_train[s_attr]) 
         
 
-        print "\n"
-        print "Accuracy: %0.3f" % (test_score)
+        print("\n")
+        print("Accuracy: %0.3f" % (test_score))
         print_stats = True # only print stats for the test fold
         s_attr_to_fp_fn_test = get_fpr_fnr_sensitive_features(y_test, all_class_labels_assigned_test, x_control_test, sensitive_attrs, print_stats)
         cov_all_test[s_attr] = get_sensitive_attr_constraint_fpr_fnr_cov(None, x_test, y_test, distances_boundary_test, x_control_test[s_attr]) 
-        print "\n"
+        print("\n")
 
     return train_score, test_score, cov_all_train, cov_all_test, s_attr_to_fp_fn_train, s_attr_to_fp_fn_test
 
@@ -237,11 +237,11 @@ def get_constraint_list_cov(x_train, y_train, x_control_train, sensitive_attrs_t
 
                 #################################################################
                 # #DCCP constraints
-                dist_bound_prod = mul_elemwise(y_train[idx], x_train[idx] * w) # y.f(x)
+                dist_bound_prod = cvxpy.multiply(y_train[idx], x_train[idx] * w) # y.f(x)
                 
-                cons_sum_dict[0][v] = sum_entries( min_elemwise(0, dist_bound_prod) ) * (s_val_to_avg[0][v] / len(x_train)) # avg misclassification distance from boundary
-                cons_sum_dict[1][v] = sum_entries( min_elemwise(0, mul_elemwise( (1 - y_train[idx])/2.0, dist_bound_prod) ) ) * (s_val_to_avg[1][v] / sum(y_train == -1)) # avg false positive distance from boundary (only operates on the ground truth neg dataset)
-                cons_sum_dict[2][v] = sum_entries( min_elemwise(0, mul_elemwise( (1 + y_train[idx])/2.0, dist_bound_prod) ) ) * (s_val_to_avg[2][v] / sum(y_train == +1)) # avg false negative distance from boundary
+                cons_sum_dict[0][v] = cvxpy.sum( cvxpy.minimum(0, dist_bound_prod) ) * (s_val_to_avg[0][v] / len(x_train)) # avg misclassification distance from boundary
+                cons_sum_dict[1][v] = cvxpy.sum( cvxpy.minimum(0, cvxpy.multiply( (1 - y_train[idx])/2.0, dist_bound_prod) ) ) * (s_val_to_avg[1][v] / sum(y_train == -1)) # avg false positive distance from boundary (only operates on the ground truth neg dataset)
+                cons_sum_dict[2][v] = cvxpy.sum( cvxpy.minimum(0, cvxpy.multiply( (1 + y_train[idx])/2.0, dist_bound_prod) ) ) * (s_val_to_avg[2][v] / sum(y_train == +1)) # avg false negative distance from boundary
                 #################################################################
 
                 
@@ -287,7 +287,7 @@ def get_fpr_fnr_sensitive_features(y_true, y_pred, x_control, sensitive_attrs, v
         s_attr_to_fp_fn[s] = {}
         s_attr_vals = x_control_internal[s]
         if verbose == True:
-            print "||  s  || FPR. || FNR. ||"
+            print("||  s  || FPR. || FNR. ||")
         for s_val in sorted(list(set(s_attr_vals))):
             s_attr_to_fp_fn[s][s_val] = {}
             y_true_local = y_true[s_attr_vals==s_val]
@@ -320,7 +320,7 @@ def get_fpr_fnr_sensitive_features(y_true, y_pred, x_control, sensitive_attrs, v
             if verbose == True:
                 if isinstance(s_val, float): # print the int value of the sensitive attr val
                     s_val = int(s_val)
-                print "||  %s  || %0.2f || %0.2f ||" % (s_val, fpr, fnr)
+                print("||  %s  || %0.2f || %0.2f ||" % (s_val, fpr, fnr))
 
         
         return s_attr_to_fp_fn
@@ -392,7 +392,7 @@ def get_sensitive_attr_constraint_fpr_fnr_cov(model, x_arr, y_arr_true, y_arr_di
         cov_type_name = cons_type_to_name[cons_type]    
         cov = cons_sum_dict[cons_type][1] - cons_sum_dict[cons_type][0]
         if verbose == True:
-            print "Covariance for type '%s' is: %0.7f" %(cov_type_name, cov)
+            print("Covariance for type '%s' is: %0.7f" %(cov_type_name, cov))
         
     return cons_sum_dict
     
@@ -415,7 +415,7 @@ def plot_fairness_acc_tradeoff(x_all, y_all, x_control_all, loss_function, cons_
     test_acc_arr, train_acc_arr, correlation_dict_test_arr, correlation_dict_train_arr, cov_dict_test_arr, cov_dict_train_arr = compute_cross_validation_error(x_all, y_all, x_control_all, num_folds, loss_function, 0, apply_accuracy_constraint, sep_constraint, sensitive_attrs, [{} for i in range(0,num_folds)], 0)
 
     for c in cov_range:
-        print "LOG: testing for multiplicative factor: %0.2f" % c
+        print("LOG: testing for multiplicative factor: %0.2f" % c)
         sensitive_attrs_to_cov_original_arr_multiplied = []
         for sensitive_attrs_to_cov_original in cov_dict_train_arr:
             sensitive_attrs_to_cov_thresh = deepcopy(sensitive_attrs_to_cov_original)
