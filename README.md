@@ -1,3 +1,6 @@
+
+*NOTE:* This repo is a fork of mbilalzafar/fair-classification to get things working with python 3 (specifically 3.6.8) as well as current versions of numpy, cvxpy, and dccp (though I had to make one modification of dccp, so the dependency is on shaycrk/dccp). Here, I've only modified/tested the methods for disparate mistreatment, so others may not work with the updated dependencies.
+
 # Fairness in Classification
 
  

@@ -1,0 +1,5 @@
+numpy==1.15.2
+scipy==1.2.1
+matplotlib==2.1.2
+cvxpy==1.0.25
+git+git://github.com/shaycrk/dccp@master
